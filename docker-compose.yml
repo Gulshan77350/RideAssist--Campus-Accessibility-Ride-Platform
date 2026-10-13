@@ -1,0 +1,115 @@
+name: rideassist
+
+x-backend: &backend
+  build:
+    context: ./backend
+    args:
+      INSTALL_DEV: "true"
+  image: rideassist-backend:dev
+  env_file: .env
+  restart: unless-stopped
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+    redis:
+      condition: service_healthy
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rideassist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rideassist}
+      POSTGRES_DB: ${POSTGRES_DB:-rideassist}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/20_test_db.sql:ro
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Catches all outgoing email in dev — read OTPs at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports: ["8025:8025", "1025:1025"]
+
+  migrate:
+    build:
+      context: ./backend
+      args:
+        INSTALL_DEV: "true"
+    image: rideassist-backend:dev
+    env_file: .env
+    command: ["sh", "-c", "alembic upgrade head && python -m scripts.seed"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  identity:
+    <<: *backend
+    command: ["uvicorn", "identity_service.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+    environment: { SERVICE_NAME: identity }
+    volumes: [documents:/data/documents]
+    ports: ["8001:8000"]
+
+  rides:
+    <<: *backend
+    command: ["uvicorn", "ride_service.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+    environment: { SERVICE_NAME: rides }
+    ports: ["8002:8000"]
+
+  location:
+    <<: *backend
+    command: ["uvicorn", "location_service.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+    environment: { SERVICE_NAME: location }
+    ports: ["8003:8000"]
+
+  notification:
+    <<: *backend
+    command: ["uvicorn", "notification_service.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment: { SERVICE_NAME: notification }
+    ports: ["8004:8000"]
+
+  # Nginx: serves the Angular app and routes /api to the services.
+  gateway:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: rideassist-gateway:dev
+    ports: ["8080:80"]
+    depends_on: [identity, rides, location]
+    restart: unless-stopped
+
+  # docker compose --profile test run --rm tests
+  tests:
+    profiles: ["test"]
+    image: rideassist-backend:dev
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://rideassist:rideassist@db:5432/rideassist_test
+      REDIS_URL: redis://redis:6379/15
+      LOCAL_STORAGE_DIR: /tmp/test-documents
+    command: ["pytest", "-q", "--cov=.", "--cov-report=term-missing:skip-covered"]
+    volumes: ["./backend:/app"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  documents:

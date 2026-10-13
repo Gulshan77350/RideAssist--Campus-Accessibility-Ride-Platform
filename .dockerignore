@@ -1,0 +1,9 @@
+# Only the gateway image builds from the repo root; keep its context small.
+**/node_modules
+**/dist
+**/.angular
+backend
+.git
+.github
+docs
+*.md
