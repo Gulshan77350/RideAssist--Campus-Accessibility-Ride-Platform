@@ -84,13 +84,19 @@ services:
     ports: ["8004:8000"]
 
   # Nginx: serves the Angular app and routes /api to the services.
-  gateway:
+   gateway:
     build:
       context: .
       dockerfile: frontend/Dockerfile
     image: rideassist-gateway:dev
     ports: ["8080:80"]
-    depends_on: [identity, rides, location]
+    depends_on:
+      identity:
+        condition: service_healthy
+      rides:
+        condition: service_healthy
+      location:
+        condition: service_healthy
     restart: unless-stopped
 
   # docker compose --profile test run --rm tests
