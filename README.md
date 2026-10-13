@@ -1,6 +1,6 @@
 # RideAssist — Campus Accessibility Ride Platform
 
-[![CI](https://github.com/OWNER/rideassist/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/rideassist/actions/workflows/ci.yml)
+[![CI](https://github.com/Gulshan77350/RideAssist--Campus-Accessibility-Ride-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Gulshan77350/RideAssist--Campus-Accessibility-Ride-Platform/actions/workflows/ci.yml)
 
 RideAssist is a full-stack, Uber/Ola-style ride-hailing platform for **verified PwD (Persons with
 Disabilities) students**. It replaces the phone-call/WhatsApp campus shuttle with on-demand
